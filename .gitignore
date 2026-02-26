@@ -1,0 +1,15 @@
+# Data — never committed
+data/raw/
+data/flat/
+data/input/
+data/archive/
+
+# Local config overrides
+config/local.yaml
+
+# Python
+venv/
+__pycache__/
+*.pyc
+.env
+*.egg-info/
