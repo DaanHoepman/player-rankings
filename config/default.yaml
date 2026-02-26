@@ -1,1 +1,7 @@
 # config/default.yaml
+
+paths:
+  raw_data: data/raw
+
+scraper:
+  tournament_ids: []
