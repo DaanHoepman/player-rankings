@@ -1,0 +1,3 @@
+[submodule "scraper"]
+	path = scraper
+	url = https://github.com/DaanHoepman/player-rankings-scraper.git
