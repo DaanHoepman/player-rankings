@@ -91,8 +91,9 @@ def _walk_tournament(
                 all_players.extend(match_players)
 
                 # Build name to canonical ID lookup for this match's four players
+                # match_players entries look like {"id": ..., "name": ...}
                 name_to_canonical = {
-                    p[DataKeys.Player.ID]: p[DataKeys.Player.NAME]
+                    p[DataKeys.Player.NAME]: p[DataKeys.Player.ID]
                     for p in match_players
                 }
 
@@ -152,8 +153,13 @@ def _substitute_canonical_ids(
 
     for team_key in [DataKeys.Match.TEAM_1, DataKeys.Match.TEAM_2]:
         for player_key in [DataKeys.Team.PLAYER_1, DataKeys.Team.PLAYER_2]:
-            scraped_name = raw_match[team_key][player_key]
-            updated[team_key][player_key] = name_to_canonical.get(scraped_name)
+            # raw_match stores a nested dict with id and name
+            scraped = raw_match[team_key][player_key]
+            # fall back to None if the expected sub-key is missing
+            scraped_name = scraped.get(DataKeys.Player.NAME) if isinstance(scraped, dict) else None
+            updated[team_key][player_key] = (
+                name_to_canonical.get(scraped_name) if scraped_name is not None else None
+            )
 
     return updated
 

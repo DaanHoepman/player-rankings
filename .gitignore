@@ -13,3 +13,6 @@ __pycache__/
 *.pyc
 .env
 *.egg-info/
+
+# Notebooks
+notebooks/

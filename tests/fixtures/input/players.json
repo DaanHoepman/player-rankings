@@ -1,0 +1,107 @@
+{
+  "PLR-001": {
+    "canonical_id": "PLR-001",
+    "display_name": "Player Alpha",
+    "name": "Player Alpha",
+    "gender": "male",
+    "starting_rating": 1000
+  },
+  "PLR-002": {
+    "canonical_id": "PLR-002",
+    "display_name": "Player Bravo",
+    "name": "Player Bravo",
+    "gender": "male",
+    "starting_rating": 1000
+  },
+  "PLR-003": {
+    "canonical_id": "PLR-003",
+    "display_name": "Player Charlie",
+    "name": "Player Charlie",
+    "gender": "male",
+    "starting_rating": 1000
+  },
+  "PLR-004": {
+    "canonical_id": "PLR-004",
+    "display_name": "Player Delta",
+    "name": "Player Delta",
+    "gender": "female",
+    "starting_rating": 1000
+  },
+  "PLR-005": {
+    "canonical_id": "PLR-005",
+    "display_name": "Player Echo",
+    "name": "Player Echo",
+    "gender": "male",
+    "starting_rating": 1000
+  },
+  "PLR-006": {
+    "canonical_id": "PLR-006",
+    "display_name": "Player Foxtrot",
+    "name": "Player Foxtrot",
+    "gender": "female",
+    "starting_rating": 1000
+  },
+  "PLR-007": {
+    "canonical_id": "PLR-007",
+    "display_name": "Player Golf",
+    "name": "Player Golf",
+    "gender": "male",
+    "starting_rating": 1000
+  },
+  "PLR-008": {
+    "canonical_id": "PLR-008",
+    "display_name": "Player Hotel",
+    "name": "Player Hotel",
+    "gender": "female",
+    "starting_rating": 1000
+  },
+  "PLR-009": {
+    "canonical_id": "PLR-009",
+    "display_name": "Player India",
+    "name": "Player India",
+    "gender": "male",
+    "starting_rating": 1000
+  },
+  "PLR-010": {
+    "canonical_id": "PLR-010",
+    "display_name": "Player Juliet",
+    "name": "Player Juliet",
+    "gender": "female",
+    "starting_rating": 1000
+  },
+  "PLR-011": {
+    "canonical_id": "PLR-011",
+    "display_name": "Player Kilo",
+    "name": "Player Kilo",
+    "gender": "male",
+    "starting_rating": 1000
+  },
+  "PLR-012": {
+    "canonical_id": "PLR-012",
+    "display_name": "Player Lima",
+    "name": "Player Lima",
+    "gender": "female",
+    "starting_rating": 1000
+  },
+  "PLR-013": {
+    "canonical_id": "PLR-013",
+    "display_name": "Player Mike",
+    "name": "Player Mike",
+    "gender": "male",
+    "starting_rating": 1000
+  },
+  "PLR-014": {
+    "canonical_id": "PLR-014",
+    "display_name": "Player November",
+    "name": "Player November",
+    "gender": "male",
+    "starting_rating": 1000
+  },
+  "PLR-015": {
+    "canonical_id": "PLR-015",
+    "display_name": "Player Oscar",
+    "name": "Player Oscar",
+    "gender": "female",
+    "starting_rating": 1000
+  }
+}

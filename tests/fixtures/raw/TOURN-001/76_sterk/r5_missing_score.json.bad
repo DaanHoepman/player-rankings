@@ -1,0 +1,24 @@
+[
+  {
+    "match_id": "match_bad_score",
+    "date": "2025-10-03",
+    "time": "21:00:00",
+    "team_1": {
+      "player_1": {"id": 1, "name": "Player Alpha"},
+      "player_2": {"id": 2, "name": "Player Bravo"},
+      "winner": false
+    },
+    "team_2": {
+      "player_1": {"id": 3, "name": "Player Charlie"},
+      "player_2": {"id": 4, "name": "Player Delta"},
+      "score": 14,
+      "winner": true
+    },
+    "winner_team": 2,
+    "status": "completed",
+    "info": null,
+    "category": "7/6 sterk",
+    "poule": "Groep A",
+    "scraped_at": "2026-02-26 18:08:36"
+  }
+]
