@@ -32,7 +32,16 @@ class FileNames:
         """
         Standard file names for raw data files (output of scraping, input to parsing)
         """
-        METADATA = 'metadata.json'   
+        METADATA = 'metadata.json'
+
+
+    class Flat(StrEnum):
+        """
+        Standard file names for flat data files (output of consolidation)
+        """
+        TOURNAMENTS = "tournaments.json"
+        MATCHES = "matches.json"
+        PLAYERS = "players.json"
 
 #-------------------------------------------------------------------------
 
