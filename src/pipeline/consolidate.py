@@ -5,10 +5,10 @@ import json
 from pathlib import Path
 from typing import List, Dict, Tuple
 
-from src.pipeline._parsers import load_tournament_metadata, parse_match
-from src.pipeline._deduplicator import extract_players_from_match, deduplicate_players
-from src.pipeline._id_resolver import load_id_map, load_players, save_id_map, save_players
-from src.constants import DataKeys, FileNames
+from pipeline._parsers import load_tournament_metadata, parse_match
+from pipeline._deduplicator import extract_players_from_match, deduplicate_players
+from pipeline._id_resolver import load_id_map, load_players, save_id_map, save_players
+from constants import DataKeys, FileNames
 
 #------------------------------------------------------------
 
@@ -239,3 +239,29 @@ def consolidate(raw_path: str, output_path: str, input_path: str) -> None:
     print(f"\t{len(all_matches)} matches")
     print(f"\t{len(unique_players)} unique players")
     
+
+#------------------------------------------------------------
+
+if __name__ == "__main__":
+    from settings import load_config
+
+    config = load_config()
+
+    try:
+        raw_path = config["paths"]["raw_data"]
+    except:
+        raise 
+    try:
+        output_path = config["paths"]["processed_data"]
+    except:
+        raise
+    try:
+        input_path = config["paths"]["processed_data"]
+    except:
+        raise
+
+    consolidate(
+        raw_path=raw_path,
+        output_path=output_path,
+        input_path=input_path
+    )

@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Dict
 from hashlib import sha256
 
-from src.constants import FileNames
+from constants import FileNames
 
 #-------------------------------------------------------------------------
 

@@ -1,8 +1,5 @@
 # Data — never committed
-data/raw/
-data/flat/
-data/input/
-data/archive/
+data/
 
 # Local config overrides
 config/local.yaml

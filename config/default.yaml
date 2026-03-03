@@ -2,6 +2,9 @@
 
 paths:
   raw_data: data/raw
+  processed_data: data/consolidated
+  input_data: data/input
+  archive: data/archive
 
 scraper:
   tournament_ids: []

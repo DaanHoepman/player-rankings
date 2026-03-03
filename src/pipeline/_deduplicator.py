@@ -2,8 +2,8 @@
 
 from typing import Dict, List
 
-from src.constants import DataKeys
-from src.pipeline._id_resolver import resolve_player
+from constants import DataKeys
+from pipeline._id_resolver import resolve_player
 
 #-------------------------------------------------------------------------
 
