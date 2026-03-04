@@ -110,6 +110,7 @@ class DataKeys:
         """
         ID = "id"
         NAME = "name"
+        GENDER = "gender"
         FIRST_SEEN = "first_seen"
         LAST_SEEN = "last_seen"
         ACTIVE_SPAN_DAYS = "active_span_days"

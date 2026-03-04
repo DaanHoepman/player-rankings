@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Dict
 from hashlib import sha256
 
-from constants import FileNames
+from constants import FileNames, DataKeys
 
 #-------------------------------------------------------------------------
 
@@ -239,7 +239,7 @@ def _open_resolution_popup(scraped_name: str, id_map: Dict[str, str], players: D
 
     # Build display list from players.json records
     all_players = [
-        (record["canonical_id"], record["display_name"])
+        (record[DataKeys.Player.ID], record[DataKeys.Player.NAME])
         for record in players.values()
     ]
 
@@ -256,7 +256,7 @@ def _open_resolution_popup(scraped_name: str, id_map: Dict[str, str], players: D
     search_var.trace_add("write", _on_search_changed)
 
     # Autofill search with scraped name on open
-    search_var.set(scraped_name)
+    search_var.set(scraped_name.split()[0])
     search_entry.icursor("end")
 
     # ── Action buttons ────────────────────────
@@ -273,20 +273,90 @@ def _open_resolution_popup(scraped_name: str, id_map: Dict[str, str], players: D
             )
             return
         canonical_id = tree.item(selected)["values"][0]
-        result["canonical_id"] = canonical_id
+        result[DataKeys.Player.ID] = canonical_id
         root.destroy()
 
     def _register_new() -> None:
-        new_id = _generate_canonical_id(scraped_name, players)
-        # Create skeleton record in players — fill in gender/starting_rating manually afterwards
-        players[new_id] = {
-            "canonical_id":    new_id,
-            "display_name":    scraped_name,
-            "gender":          None,
-            "starting_rating": None
-        }
-        result["canonical_id"] = new_id
-        root.destroy()
+        # Disable main window while registration dialog is open
+        root.attributes("-disabled", True)
+
+        dialog = tk.Toplevel(root)
+        dialog.title("Register New Player")
+        dialog.resizable(False, False)
+        dialog.configure(bg="#1e1e2e")
+        dialog.grab_set()
+
+        d_outer = ttk.Frame(dialog, padding=20)
+        d_outer.pack(fill="both", expand=True)
+
+        ttk.Label(d_outer, text="Register New Player", style="Header.TLabel").pack(anchor="w", pady=(0, 4))
+        ttk.Label(d_outer, text=f"Name:  {scraped_name}").pack(anchor="w", pady=(0, 16))
+
+        # ── Gender ────────────────────────────
+        ttk.Label(d_outer, text="Gender:").pack(anchor="w")
+        gender_var = tk.StringVar(value="")
+        gender_frame = ttk.Frame(d_outer)
+        gender_frame.pack(fill="x", pady=(4, 12))
+        ttk.Radiobutton(gender_frame, text="Male",    variable=gender_var, value="male").pack(side="left", padx=(0, 12))
+        ttk.Radiobutton(gender_frame, text="Female",  variable=gender_var, value="female").pack(side="left", padx=(0, 12))
+        ttk.Radiobutton(gender_frame, text="Other", variable=gender_var, value="other").pack(side="left")
+
+        # ── Starting rating ───────────────────
+        ttk.Label(d_outer, text="Starting rating:").pack(anchor="w")
+        rating_var = tk.StringVar(value="")
+        ttk.Entry(d_outer, textvariable=rating_var, width=20).pack(anchor="w", pady=(4, 4))
+        ttk.Label(d_outer, text="Leave blank to use the default from config.", style="Muted.TLabel").pack(anchor="w", pady=(0, 16))
+
+        # ── Confirm / Cancel ──────────────────
+        def _confirm() -> None:
+            rating_raw = rating_var.get().strip()
+            if rating_raw:
+                try:
+                    rating = float(rating_raw)
+                except ValueError:
+                    messagebox.showwarning(
+                        "Invalid rating",
+                        "Starting rating must be a number, or leave it blank.",
+                        parent=dialog
+                    )
+                    return
+            else:
+                rating = None
+
+            gender = gender_var.get() or None
+
+            new_id = _generate_canonical_id(scraped_name, players)
+            players[new_id] = {
+                DataKeys.Player.ID: new_id,
+                DataKeys.Player.NAME: scraped_name,
+                DataKeys.Player.GENDER: gender,
+                DataKeys.Rating.INITIAL_RANK: rating
+            }
+            result[DataKeys.Player.ID] = new_id
+            root.attributes("-disabled", False)
+            dialog.destroy()
+            root.destroy()
+
+        def _cancel_dialog() -> None:
+            root.attributes("-disabled", False)
+            dialog.destroy()
+
+        btn_frame_d = ttk.Frame(d_outer)
+        btn_frame_d.pack(fill="x")
+        ttk.Button(btn_frame_d, text="Confirm", style="Accent.TButton", command=_confirm).pack(side="left", padx=(0, 8))
+        ttk.Button(btn_frame_d, text="Cancel",  command=_cancel_dialog).pack(side="left")
+
+        dialog.bind("<Return>", lambda _: _confirm())
+        dialog.bind("<Escape>", lambda _: _cancel_dialog())
+        dialog.protocol("WM_DELETE_WINDOW", _cancel_dialog)
+
+        # Centre dialog over parent window
+        dialog.update_idletasks()
+        dw = dialog.winfo_reqwidth()
+        dh = dialog.winfo_reqheight()
+        px = root.winfo_x() + root.winfo_width()  // 2
+        py = root.winfo_y() + root.winfo_height() // 2
+        dialog.geometry(f"{dw}x{dh}+{px - dw // 2}+{py - dh // 2}")   
 
     ttk.Button(
         btn_frame,
@@ -326,4 +396,4 @@ def _open_resolution_popup(scraped_name: str, id_map: Dict[str, str], players: D
 
     root.mainloop()
 
-    return result["canonical_id"]
+    return result[DataKeys.Player.ID]

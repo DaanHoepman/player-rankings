@@ -256,7 +256,7 @@ if __name__ == "__main__":
     except:
         raise
     try:
-        input_path = config["paths"]["processed_data"]
+        input_path = config["paths"]["input_data"]
     except:
         raise
 
