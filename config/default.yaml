@@ -2,7 +2,8 @@
 
 paths:
   raw_data: data/raw
-  processed_data: data/consolidated
+  consolidated_data: data/consolidated
+  processed_data: data/processed
   input_data: data/input
   archive: data/archive
 

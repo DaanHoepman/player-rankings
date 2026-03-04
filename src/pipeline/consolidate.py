@@ -252,7 +252,7 @@ if __name__ == "__main__":
     except:
         raise 
     try:
-        output_path = config["paths"]["processed_data"]
+        output_path = config["paths"]["consolidated_data"]
     except:
         raise
     try:

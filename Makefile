@@ -13,4 +13,4 @@ test:
 	pytest tests/
 
 archive:
-	xcopy data\flat data\archive\%date%\ /E /I
+	xcopy data\ data\archive\%date%\ /E /I
