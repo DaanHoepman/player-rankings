@@ -14,6 +14,14 @@ class StrEnum(str, Enum):
     def __repr__(self):
         return self.value
     
+
+class FloatEnum(float, Enum):
+    """
+    Base class for float enums to ellow for type checking and autocompletion.
+    """
+    def __repr__(self):
+        return self.value
+    
 #-------------------------------------------------------------------------
 
 class FileNames:
@@ -170,3 +178,17 @@ class DefaultValues:
         DATE = r"%Y-%m-%d"
         TIME = r"%H:%M:%S"
         DATETIME = DATE + " " + TIME
+
+    
+    class Models:
+        """
+        Class for default values used as model parameters
+        """
+        class Knltb(FloatEnum):
+            """
+            Default KnltbModel parameters
+            """
+            K = 0.275
+            Q = 2.012
+            THETA = 0.5
+            R0 = 8
