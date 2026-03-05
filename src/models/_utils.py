@@ -2,6 +2,8 @@
 
 from constants import DefaultValues
 
+#-------------------------------------------------------------------------
+
 def knltb_to_trueskill_mu(
     knltb_rating: float,
     knltb_min: float = DefaultValues.Models.Conversion.KNLTB_MIN,
