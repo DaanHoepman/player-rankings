@@ -43,16 +43,16 @@ class KnltbModel(BaseModel):
         theta: float = DefaultValues.Models.Knltb.THETA,
         r_0: float = DefaultValues.Models.Knltb.R0
     ) -> None:
-        self.k =        k
-        self.q =        q
-        self.theta =    theta
-        self._history = []
+        self.k          = k
+        self.q          = q
+        self.theta      = theta
+        self._history   = []
 
         self.ratings = {
             key: {
-                DataKeys.Player.NAME: value[DataKeys.Player.NAME],
-                DataKeys.Rating.INITIAL_RANK: float(value[DataKeys.Rating.INITIAL_RANK]),
-                DataKeys.Rating.KNLTB_RANK: float(value[DataKeys.Rating.INITIAL_RANK]) if value[DataKeys.Rating.INITIAL_RANK] else r_0,
+                DataKeys.Player.NAME:               value[DataKeys.Player.NAME],
+                DataKeys.Rating.INITIAL_RANK:       float(value[DataKeys.Rating.INITIAL_RANK]),
+                DataKeys.Rating.KNLTB_RANK:         float(value[DataKeys.Rating.INITIAL_RANK]) if value[DataKeys.Rating.INITIAL_RANK] else r_0,
                 DataKeys.Player.NUM_MATCHES_PLAYED: 0,
             }
             for key, value in players.items()
