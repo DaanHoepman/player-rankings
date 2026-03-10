@@ -61,45 +61,49 @@ class DataKeys:
         """
         Standard keys for tournament records
         """
-        ID                      = "tournament_id"
-        NAME                    = "tournament_name"
-        START_DATE              = "start_date"
-        END_DATE                = "end_date"
-        DURATION_DAYS           = "duration_days"
-        NUM_GAME_DAYS           = "num_game_days"
-        IS_ACTIVE               = "is_active"
-        NUM_CATEGORIES          = "num_categories"
-        NUM_POULES              = "num_poules"
-        NUM_REGISTRATIONS       = "num_registrations"
-        NUM_PLAYERS             = "num_players"
-        NUM_MATCHES             = "num_matches"
-        NUM_MATCHES_PLAYED      = "num_matches_played"
-        COMPLETION_RATE         = "completion_rate"
-        AVG_MATCHES_PER_PLAYER  = "avg_matches_per_player"
-        AVG_MATCHES_PER_POULE   = "avg_matches_per_poule"
-        IS_COMPLETED            = "is_completed"
+        ID                     = "id"
+        NAME                   = "name"
+        START_DATE             = "start_date"
+        END_DATE               = "end_date"
+        DURATION_DAYS          = "duration_days"
+        NUM_GAME_DAYS          = "num_game_days"
+        IS_ACTIVE              = "is_active"
+        NUM_CATEGORIES         = "num_categories"
+        NUM_POULES             = "num_poules"
+        NUM_REGISTRATIONS      = "num_registrations"
+        NUM_PLAYERS            = "num_players"
+        NUM_MATCHES            = "num_matches"
+        NUM_MATCHES_PLAYED     = "num_matches_played"
+        COMPLETION_RATE        = "completion_rate"
+        AVG_MATCHES_PER_PLAYER = "avg_matches_per_player"
+        AVG_MATCHES_PER_POULE  = "avg_matches_per_poule"
+        IS_COMPLETED           = "is_completed"
 
 
     class Match(StrEnum):
         """
         Standard keys for match records
         """
-        ID              = "match_id"
-        CATEGORY        = "category"
-        POULE           = "poule"
-        DATE            = "date"
-        TIME            = "time"
-        TEAM_1          = "team_1"
-        TEAM_2          = "team_2"
-        WINNER          = "winner_team"
-        WINNER_SCORE    = "winner_score"
-        LOSER_SCORE     = "loser_score"
-        SCORE_DIFF      = "score_diff"
-        IS_PLAYED       = "is_played"
-        IS_WALKOVER     = "is_walkover"
-        IS_VALID        = "is_valid"
-        STATUS          = "status"
-        INFO            = "info"
+        ID           = "id"
+        TOURNAMENT   = "tournament"
+        CATEGORY     = "category"
+        POULE        = "poule"
+        DATE         = "date"
+        TIME         = "time"
+        TEAM_1_ID    = "team_1_id"
+        TEAM_2_ID    = "team_2_id"
+        TEAM_1_SCORE = "team_1_score"
+        TEAM_2_SCORE = "team_2_score"
+        WINNER       = "winner_team"
+        WINNER_SCORE = "winner_score"
+        LOSER_SCORE  = "loser_score"
+        SCORE_DIFF   = "score_diff"
+        TOTAL_GAMES  = "total_games"
+        IS_PLAYED    = "is_played"
+        IS_WALKOVER  = "is_walkover"
+        IS_VALID     = "is_valid"
+        STATUS       = "status"
+        INFO         = "info"
 
 
     class Team(StrEnum):
@@ -161,15 +165,26 @@ class DefaultValues:
     """
     Class for default values used in the pipeline.
     """
+    class Match:
+        """
+        Class for default values used in match records.
+        """
+        class Status(StrEnum):
+            COMPLETED   = "completed"
+            PENDING     = "pending"
+
+        class Info(StrEnum):
+            CANCELED    = "Geannuleerd"
+
+        WALKOVER_VALUES = ["Walkover", "Opgave", "Diskwalificatie"]
+
+
     class Entries(StrEnum):
         """
         Default values for various data entries
         """
         POULE_PLACEHOLDER   = "X"
-        COMPLETED_STATUS    = "completed"
-        PENDING_STATUS      = "pending"
-        CANCELED_MATCH_INFO = "Geannuleerd"
-        WALKOVER_VALUES     = ["Walkover", "Opgave", "Diskwalificatie"]
+        UNKNOWN             = "unknown"
 
 
     class DateFormat(StrEnum):
