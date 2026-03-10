@@ -110,10 +110,11 @@ class DataKeys:
         """
         Standard keys for team records
         """
-        PLAYER_1    = "player_1"
-        PLAYER_2    = "player_2"
-        SCORE       = "score"
-        WINNER      = "winner"
+        ID       = "id"
+        PLAYER_1 = "player_1"
+        PLAYER_2 = "player_2"
+        SCORE    = "score"
+        WINNER   = "winner"
 
 
     class Player(StrEnum):
