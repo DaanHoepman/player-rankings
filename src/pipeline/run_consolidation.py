@@ -1,13 +1,13 @@
-# src/pipeline/consolidate.py
+# src/pipeline/run_consolidation.py
 
 import json
 
 from pathlib import Path
 from typing import List, Dict, Tuple
 
-from pipeline._parsers import load_tournament_metadata, parse_match
-from pipeline._deduplicator import extract_players_from_match, deduplicate_players
-from pipeline._id_resolver import load_id_map, load_players, save_id_map, save_players
+from consolidation.parsers import load_tournament_metadata, parse_match
+from consolidation.deduplicator import extract_players_from_match, deduplicate_players
+from consolidation.id_resolver import load_id_map, load_players, save_id_map, save_players
 from constants import DataKeys, FileNames
 
 #------------------------------------------------------------

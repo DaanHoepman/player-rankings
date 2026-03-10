@@ -1,9 +1,9 @@
-# src/pipeline/_deduplicator.py
+# src/consolidation/deduplicator.py
 
 from typing import Dict, List
 
 from constants import DataKeys
-from pipeline._id_resolver import resolve_player
+from consolidation.id_resolver import resolve_player
 
 #-------------------------------------------------------------------------
 

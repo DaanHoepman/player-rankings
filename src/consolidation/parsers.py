@@ -1,4 +1,4 @@
-# src/pipeline/_parsers.py
+# src/consolidation/parsers.py
 
 import json
 
