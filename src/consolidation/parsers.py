@@ -22,8 +22,8 @@ def parse_tournament_metadata(tournament_id: str, metadata: Dict) -> Dict:
         Folder name used as the tournament's unique identifier.
     metadata : Dict
         Raw dict loaded from metadata.json. This dict should at least
-        contain the following keys: 'name', 'start_date', 'end_date', 
-        'num_categories', 'num_registrations', 'scraped_at'.
+        contain the following keys: 'tournament_name', 'start_date', 
+        'end_date', 'num_categories', 'num_registrations', 'scraped_at'.
 
     Returns
     -------
@@ -32,9 +32,9 @@ def parse_tournament_metadata(tournament_id: str, metadata: Dict) -> Dict:
     """
     return {
         DataKeys.Tournament.ID:                tournament_id,
-        DataKeys.Tournament.NAME:              metadata["name"],
-        DataKeys.Tournament.START_DATE:        metadata["start_data"],
-        DataKeys.Tournament.END_DATE:          metadata["end_data"],
+        DataKeys.Tournament.NAME:              metadata["tournament_name"],
+        DataKeys.Tournament.START_DATE:        metadata["start_date"],
+        DataKeys.Tournament.END_DATE:          metadata["end_date"],
         DataKeys.Tournament.NUM_CATEGORIES:    metadata["num_categories"],
         DataKeys.Tournament.NUM_REGISTRATIONS: metadata["num_registrations"],
         DataKeys.General.SCRAPED_AT:           metadata["scraped_at"] 
@@ -127,9 +127,9 @@ def parse_match(
     ----------
     match : Dict
         Raw match dict from a poule json file. Each match should at
-        least contain the following keys: 'id', 'category', 'poule',
-        'info', 'scraped_at', and two nested dictionaries called
-        'team_1' and 'team_2', with both having a 'score' key.
+        least contain the following keys: 'match_id', 'category', 
+        'poule', 'info', 'scraped_at', and two nested dictionaries 
+        called 'team_1' and 'team_2', with both having a 'score' key.
     tournament_id : str
         ID of the tournament this match belongs to.
     team_1_id, team_2_id : str
@@ -146,7 +146,7 @@ def parse_match(
         )
     
     return {
-        DataKeys.Match.ID:           match["id"],
+        DataKeys.Match.ID:           match["match_id"],
         DataKeys.Match.TOURNAMENT:   tournament_id,
         DataKeys.Match.CATEGORY:     match["category"],
         DataKeys.Match.POULE:        match["poule"],
