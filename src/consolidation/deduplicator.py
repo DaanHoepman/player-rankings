@@ -1,11 +1,11 @@
 # src/consolidation/deduplicator.py
 
-# ── External Imports ──────────────────────────────────────────────────
+# ── Standard Library Imports ──────────────────────────────────────────
 
 from hashlib import sha256
 from typing import Dict, List, Tuple
 
-# ── Internal Imports ──────────────────────────────────────────────────
+# ── Local Library Imports ─────────────────────────────────────────────
 
 from constants import DataKeys
 from consolidation.id_resolver import resolve_player
