@@ -50,6 +50,7 @@ class FileNames:
         TOURNAMENTS = "tournaments.json"
         MATCHES     = "matches.json"
         PLAYERS     = "players.json"
+        TEAMS       = "teams.json"
 
 #-------------------------------------------------------------------------
 
