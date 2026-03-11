@@ -1,11 +1,18 @@
 # config/default.yaml
 
 paths:
-  raw_data: data/raw
-  consolidated_data: data/consolidated
-  processed_data: data/processed
-  input_data: data/input
-  archive: data/archive
+  raw_data:           data/raw
+  consolidated_data:  data/consolidated
+  processed_data:     data/processed
+  input_data:         data/input
+  output_data:        data/output
+  archive:            data/archive
+
+models:
+  output_format: csv
+  tournaments:
+    - XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX
 
 scraper:
-  tournament_ids: []
+  tournament_ids:
+    - XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX
