@@ -1,4 +1,4 @@
-# src/pipeline/_id_resolver.py
+# src/consolidation/id_resolver.py
 
 import json
 import tkinter as tk
