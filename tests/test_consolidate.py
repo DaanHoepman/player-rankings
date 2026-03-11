@@ -1,275 +1,726 @@
+# tests/test_consolidate.py
+
 import json
-import shutil
-import sys
-from pathlib import Path
-
-# ensure the "src" package is importable when running tests from the repo root
-root = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(root))
-
-def _fixture_path(*parts: str) -> Path:
-    """Helper to build a path relative to the fixtures directory."""
-    return Path(__file__).parent / "fixtures" / Path("".join(parts))
-
-
 import pytest
 
-from src.constants import DataKeys
-from src.pipeline.consolidate import (
+from pathlib import Path
+from unittest.mock import patch
+
+from consolidation.parsers import (
+    parse_tournament_metadata,
+    load_tournament_metadata,
+    _parse_match_datetime,
+    parse_match,
+)
+from consolidation.id_resolver import (
+    load_id_map,
+    save_id_map,
+    load_players,
+    save_players,
+    _generate_canonical_id,
+    resolve_player,
+)
+from consolidation.deduplicator import (
+    extract_players_from_match,
+    deduplicate_players,
+    _generate_team_id,
+    _register_team,
+    extract_teams_from_match,
+)
+from pipeline.run_consolidation import (
     _write_output,
     _load_raw_poule,
-    _substitute_canonical_ids,
     _walk_tournament,
     consolidate,
 )
-from src.pipeline._deduplicator import deduplicate_players
-from src.pipeline._id_resolver import load_id_map, load_players
+from constants import DataKeys, FileNames
 
 
-# ---------- basic utility tests ----------
+# ── Shared fixtures ───────────────────────────────────────────────────────────
 
-def test_write_output_creates_file(tmp_path, capsys):
-    data = [{"foo": "bar"}, {"baz": 123}]
-    _write_output(data, "out.json", tmp_path)
-    out_file = tmp_path / "out.json"
-    assert out_file.exists(), "output file should be written"
-
-    with open(out_file, encoding="utf-8") as f:
-        assert json.load(f) == data
-
-    captured = capsys.readouterr()
-    assert "Wrote 2 records to" in captured.out
-
-
-def test_load_raw_poule_valid_empty_and_malformed():
-    # valid file from fixtures
-    valid = Path(__file__).parent / "fixtures" / "raw" / "TOURN-001" / "76_sterk" / "r1_groep_a.json"
-    records = _load_raw_poule(valid)
-    assert isinstance(records, list) and len(records) == 5
-
-    empty = Path(__file__).parent / "fixtures" / "raw" / "TOURN-001" / "76_sterk" / "r2_groep_empty.json"
-    assert _load_raw_poule(empty) == []
-
-    broken = Path(__file__).parent / "fixtures" / "raw" / "TOURN-001" / "76_sterk" / "r3_groep_malformed.json.broken"
-    with pytest.raises((json.JSONDecodeError, ValueError)):
-        _load_raw_poule(broken)
-
-
-def test_substitute_canonical_ids_does_replacement():
-    parsed = {
-        DataKeys.Match.TEAM_1: {DataKeys.Team.PLAYER_1: None, DataKeys.Team.PLAYER_2: None},
-        DataKeys.Match.TEAM_2: {DataKeys.Team.PLAYER_1: None, DataKeys.Team.PLAYER_2: None},
-    }
-    # raw_match values are dictionaries with at least "name" key
-    raw = {
-        DataKeys.Match.TEAM_1: {
-            DataKeys.Team.PLAYER_1: {"id": 1, "name": "Alice"},
-            DataKeys.Team.PLAYER_2: {"id": 2, "name": "Bob"},
-        },
-        DataKeys.Match.TEAM_2: {
-            DataKeys.Team.PLAYER_1: {"id": 3, "name": "Charlie"},
-            DataKeys.Team.PLAYER_2: {"id": 4, "name": "Dana"},
-        },
-    }
-    mapping = {"Alice": "ID1", "Bob": "ID2", "Charlie": "ID3"}
-
-    result = _substitute_canonical_ids(parsed, raw, mapping)
-    # original parsed object should not be mutated
-    assert parsed[DataKeys.Match.TEAM_1][DataKeys.Team.PLAYER_1] is None
-
-    assert result[DataKeys.Match.TEAM_1][DataKeys.Team.PLAYER_1] == "ID1"
-    assert result[DataKeys.Match.TEAM_1][DataKeys.Team.PLAYER_2] == "ID2"
-    assert result[DataKeys.Match.TEAM_2][DataKeys.Team.PLAYER_1] == "ID3"
-    assert result[DataKeys.Match.TEAM_2][DataKeys.Team.PLAYER_2] is None
-
-
-def test_deduplicate_players_collapses_duplicates():
-    players = [
-        {DataKeys.Player.ID: "A", DataKeys.Player.NAME: "x"},
-        {DataKeys.Player.ID: "B", DataKeys.Player.NAME: "y"},
-        {DataKeys.Player.ID: "A", DataKeys.Player.NAME: "x"},
-    ]
-    unique = deduplicate_players(players)
-    assert len(unique) == 2
-    ids = {p[DataKeys.Player.ID] for p in unique}
-    assert ids == {"A", "B"}
-
-
-# ---------- _walk_tournament tests ----------
-
-def _clone_tournament(src_folder: Path, dest_root: Path, keep_files=None):
-    """Copy a subset of files from the fixture tournament to a temporary location.
-
-    ``keep_files`` is a list of substring patterns that will be kept; all other
-    poule json files are deleted.  The tournament's metadata.json is always
-    preserved since it is required for parsing.
+@pytest.fixture
+def temp_dirs(tmp_path):
     """
-    dst = dest_root / src_folder.name
-    shutil.copytree(src_folder, dst)
-    if keep_files is not None:
-        for p in dst.rglob("*.json"):
-            # always keep the metadata file
-            if p.name == "metadata.json":
-                continue
-            if not any(pattern in p.name for pattern in keep_files):
-                p.unlink()
-    return dst
+    Provide isolated temporary input, output, and raw directories.
+    Uses pytest's built-in tmp_path fixture — no manual cleanup needed.
+    """
+    input_path  = tmp_path / "input"
+    output_path = tmp_path / "output"
+    raw_path    = tmp_path / "raw"
+
+    input_path.mkdir()
+    output_path.mkdir()
+    raw_path.mkdir()
+
+    return {
+        "base":   tmp_path,
+        "input":  str(input_path),
+        "output": str(output_path),
+        "raw":    str(raw_path),
+    }
 
 
-def test_walk_tournament_success(tmp_path):
-    """Full walk of a cleaned replica of TOURN-001 should return the expected
-    counts and substitute canonical ids correctly."""
-    src = Path(__file__).parent / "fixtures" / "raw" / "TOURN-001"
-    # keep only the good poule files and the second category
-    clean = _clone_tournament(src, tmp_path, keep_files=["r1_groep_a", "r1_groep_b", "r1_groep_a.json", "r1_groep_a.json"])
-    # also remove the three explicitly bad files if they were copied
-    for bad in ("r3_groep_malformed.json.broken", "r4_missing_match_id.json.bad", "r5_missing_score.json.bad"):
-        for p in clean.rglob(bad):
-            p.unlink()
-
-    id_map = load_id_map(str(Path(__file__).parent / "fixtures" / "input"))
-    players = load_players(str(Path(__file__).parent / "fixtures" / "input"))
-
-    tournament, matches, raw_players = _walk_tournament(
-        tournament_path=clean,
-        id_map=id_map,
-        players=players,
-        input_path=str(Path(__file__).parent / "fixtures" / "input"),
-    )
-
-    assert tournament[DataKeys.Tournament.ID] == "TOURN-001"
-    # two poules contained data: 5 + 1 matches; plus one from the second category
-    assert len(matches) == 7
-    assert len(raw_players) == 7 * 4
-
-    # verify substitution of canonical id for first match
-    first = matches[0]
-    assert first[DataKeys.Match.TEAM_1][DataKeys.Team.PLAYER_1] == "PLR-001"
+@pytest.fixture
+def sample_metadata():
+    return {
+        "tournament_name":    "Test Tournament",
+        "start_date":         "2026-01-15",
+        "end_date":           "2026-01-17",
+        "num_categories":     3,
+        "num_registrations":  24,
+        "scraped_at":         "2026-01-10T10:00:00Z",
+    }
 
 
-def test_walk_tournament_raises_on_missing_metadata(tmp_path):
-    # folder without metadata should cause FileNotFoundError
-    bad = tmp_path / "no_meta"
-    (bad / "76_sterk").mkdir(parents=True)
-    with pytest.raises(FileNotFoundError):
-        _walk_tournament(bad, {}, {}, "unused")
+@pytest.fixture
+def sample_raw_match():
+    """
+    Raw match dict as it comes from the scraper — with nested team dicts
+    containing player sub-dicts with 'name' keys and integer scores.
+    """
+    return {
+        "match_id":   "match_001",
+        "category":   "7/6 sterk",
+        "poule":      "Groep A",
+        "date":       "2026-01-15",
+        "time":       "14:30:00",
+        "info":       "Regular match",
+        "scraped_at": "2026-01-10T10:00:00Z",
+        "team_1": {
+            "player_1": {"name": "Alice Johnson"},
+            "player_2": {"name": "Bob Smith"},
+            "score":    14,
+        },
+        "team_2": {
+            "player_1": {"name": "Charlie Brown"},
+            "player_2": {"name": "Diana Prince"},
+            "score":    8,
+        },
+    }
 
 
-def test_walk_tournament_raises_for_bad_match(tmp_path):
-    # create a tournament with a single poule file containing a record missing match_id
-    t = tmp_path / "TOURN-BAD"
-    t.mkdir()
-    # copy minimal metadata
-    src_meta = Path(__file__).parent / "fixtures" / "raw" / "TOURN-001" / "metadata.json"
-    shutil.copy(src_meta, t / "metadata.json")
-    cat = t / "cat"
-    cat.mkdir()
-    badmatch = [
+@pytest.fixture
+def sample_players():
+    return {
+        "PLR-001-ABC123": {
+            DataKeys.Player.ID:           "PLR-001-ABC123",
+            DataKeys.Player.NAME:         "Alice Johnson",
+            DataKeys.Player.GENDER:       "female",
+            DataKeys.Rating.INITIAL_RANK: 1500.0,
+        },
+        "PLR-002-DEF456": {
+            DataKeys.Player.ID:           "PLR-002-DEF456",
+            DataKeys.Player.NAME:         "Bob Smith",
+            DataKeys.Player.GENDER:       "male",
+            DataKeys.Rating.INITIAL_RANK: 1450.0,
+        },
+    }
+
+
+@pytest.fixture
+def sample_id_map():
+    return {
+        "Alice Johnson": "PLR-001-ABC123",
+        "Bob Smith":     "PLR-002-DEF456",
+    }
+
+
+@pytest.fixture
+def four_players():
+    """
+    Four fully resolved player dicts as returned by 
+    extract_players_from_match.
+    """
+    return [
         {
-            # intentionally leave out "match_id" key
-            "date": "2025-01-01",
-            DataKeys.Match.TEAM_1: {DataKeys.Team.PLAYER_1: {"id": 1, "name": "Player Alpha"}, DataKeys.Team.PLAYER_2: {"id": 2, "name": "Player Bravo"}, "score": 0},
-            DataKeys.Match.TEAM_2: {DataKeys.Team.PLAYER_1: {"id": 3, "name": "Player Charlie"}, DataKeys.Team.PLAYER_2: {"id": 4, "name": "Player Delta"}, "score": 0},
-        }
+            DataKeys.Player.ID: "PLR-001-ABC123",
+            DataKeys.Player.NAME: "Alice Johnson", 
+            DataKeys.Player.GENDER: "female"
+        },
+        {
+            DataKeys.Player.ID: "PLR-002-DEF456", 
+            DataKeys.Player.NAME: "Bob Smith",      
+            DataKeys.Player.GENDER: "male"
+        },
+        {
+            DataKeys.Player.ID: "PLR-003-GHI789", 
+            DataKeys.Player.NAME: "Charlie Brown",  
+            DataKeys.Player.GENDER: "male"
+        },
+        {
+            DataKeys.Player.ID: "PLR-004-JKL012", 
+            DataKeys.Player.NAME: "Diana Prince",   
+            DataKeys.Player.GENDER: "female"
+        },
     ]
-    with open(cat / "poule.json", "w", encoding="utf-8") as f:
-        json.dump(badmatch, f)
-
-    id_map = load_id_map(str(Path(__file__).parent / "fixtures" / "input"))
-    players = load_players(str(Path(__file__).parent / "fixtures" / "input"))
-
-    with pytest.raises(KeyError):
-        _walk_tournament(t, id_map, players, str(Path(__file__).parent / "fixtures" / "input"))
 
 
-def test_walk_tournament_handles_empty_category(tmp_path):
-    # build a tournament with metadata and an empty category folder
-    t = tmp_path / "TOURN-EMPTYCAT"
-    t.mkdir()
-    shutil.copy(
-        Path(__file__).parent / "fixtures" / "raw" / "TOURN-001" / "metadata.json",
-        t / "metadata.json",
-    )
-    (t / "emptycat").mkdir()
+# ── Parsers ───────────────────────────────────────────────────────────────────
 
-    id_map = {}
-    players = {}
-    tournament, matches, raw_players = _walk_tournament(t, id_map, players, "unused")
-    assert tournament[DataKeys.Tournament.ID] == "TOURN-EMPTYCAT"
-    assert matches == []
-    assert raw_players == []
+class TestParseTournamentMetadata:
+    def test_basic(self, sample_metadata):
+        result = parse_tournament_metadata("TOURN-001", sample_metadata)
 
+        assert result[DataKeys.Tournament.ID]                == "TOURN-001"
+        assert result[DataKeys.Tournament.NAME]              == "Test Tournament"
+        assert result[DataKeys.Tournament.START_DATE]        == "2026-01-15"
+        assert result[DataKeys.Tournament.END_DATE]          == "2026-01-17"
+        assert result[DataKeys.Tournament.NUM_CATEGORIES]    == 3
+        assert result[DataKeys.Tournament.NUM_REGISTRATIONS] == 24
+        assert result[DataKeys.General.SCRAPED_AT]           == "2026-01-10T10:00:00Z"
 
-# ---------- consolidate() integration tests ----------
-
-def test_consolidate_raises_if_raw_missing(tmp_path):
-    with pytest.raises(FileNotFoundError):
-        consolidate(str(tmp_path / "doesnotexist"), str(tmp_path / "out"), str(tmp_path / "in"))
+    def test_missing_keys_raises(self):
+        with pytest.raises(KeyError):
+            parse_tournament_metadata("TOURN-001", {"tournament_name": "Only name"})
 
 
-def test_consolidate_complete_run(tmp_path, capsys):
-    # make a temporary copy of the fixtures and remove bad files
-    raw_src = Path(__file__).parent / "fixtures" / "raw"
-    raw_copy = tmp_path / "raw"
-    shutil.copytree(raw_src, raw_copy)
-    # the fixture already contains a TOURN-NO-META folder; we'll keep that
-    # remove any tournaments other than TOURN-001 and TOURN-NO-META so our
-    # assertions are deterministic
-    for entry in list(raw_copy.iterdir()):
-        if entry.is_dir() and entry.name not in ("TOURN-001", "TOURN-NO-META"):
-            shutil.rmtree(entry)
-    # remove all problematic files from the copy (they live under TOURN-001)
-    for bad in ("r3_groep_malformed.json.broken", "r4_missing_match_id.json.bad", "r5_missing_score.json.bad"):
-        for p in raw_copy.rglob(bad):
-            p.unlink()
+class TestLoadTournamentMetadata:
+    def test_success(self, temp_dirs, sample_metadata):
+        path = Path(temp_dirs["raw"]) / "TOURN-001"
+        path.mkdir()
+        (path / FileNames.Raw.METADATA).write_text(
+            json.dumps(sample_metadata), encoding="utf-8"
+        )
 
-    input_copy = tmp_path / "input"
-    shutil.copytree(Path(__file__).parent / "fixtures" / "input", input_copy)
+        result = load_tournament_metadata(path)
+        assert result[DataKeys.Tournament.ID]   == "TOURN-001"
+        assert result[DataKeys.Tournament.NAME] == "Test Tournament"
 
-    out = tmp_path / "out"
-    consolidate(str(raw_copy), str(out), str(input_copy))
+    def test_missing_metadata_raises(self, temp_dirs):
+        path = Path(temp_dirs["raw"]) / "TOURN-001"
+        path.mkdir()
 
-    captured = capsys.readouterr().out
-    assert "Skipping TOURN-NO-META" in captured
-
-    # read output files
-    tournaments = json.load(open(out / "tournaments.json", encoding="utf-8"))
-    matches = json.load(open(out / "matches.json", encoding="utf-8"))
-    players_out = json.load(open(out / "players.json", encoding="utf-8"))
-
-    assert len(tournaments) == 1
-    assert tournaments[0][DataKeys.Tournament.ID] == "TOURN-001"
-
-    assert len(matches) == 7
-    # unique players should be 13 according to the fixture data
-    assert len(players_out) == 13
-
-    # confirm that id_map and players file were written back
-    saved_id_map = load_id_map(str(input_copy))
-    saved_players = load_players(str(input_copy))
-    assert saved_id_map
-    assert saved_players
+        with pytest.raises(FileNotFoundError):
+            load_tournament_metadata(path)
 
 
-def test_consolidate_fails_on_malformed_file(tmp_path):
-    # create a raw directory containing one malformed poule file
-    raw = tmp_path / "raw_bad"
-    raw.mkdir()
-    t = raw / "T1"
-    t.mkdir()
-    # copy metadata over
-    shutil.copy(
-        Path(__file__).parent / "fixtures" / "raw" / "TOURN-001" / "metadata.json",
-        t / "metadata.json",
-    )
-    cat = t / "cat"
-    cat.mkdir()
-    with open(cat / "broken.json", "w", encoding="utf-8") as f:
-        f.write("not a json")
+class TestParseMatchDatetime:
+    def test_valid(self):
+        d, t = _parse_match_datetime("2026-01-15", "14:30:00")
+        assert d == "2026-01-15"
+        assert t == "14:30:00"
 
-    input_copy = tmp_path / "input"
-    shutil.copytree(Path(__file__).parent / "fixtures" / "input", input_copy)
-    out = tmp_path / "out"
+    def test_invalid_date(self):
+        d, t = _parse_match_datetime("not-a-date", "14:30:00")
+        assert d is None
+        assert t == "14:30:00"
 
-    with pytest.raises(json.JSONDecodeError):
-        consolidate(str(raw), str(out), str(input_copy))
+    def test_invalid_time(self):
+        d, t = _parse_match_datetime("2026-01-15", "not-a-time")
+        assert d == "2026-01-15"
+        assert t is None
+
+    def test_both_invalid(self):
+        d, t = _parse_match_datetime("bad", "bad")
+        assert d is None
+        assert t is None
+
+    def test_empty_strings(self):
+        d, t = _parse_match_datetime("", "")
+        assert d is None
+        assert t is None
+
+    def test_none_inputs(self):
+        # .get() on a match dict with missing keys returns None
+        d, t = _parse_match_datetime(None, None) # type: ignore
+        assert d is None
+        assert t is None
+
+
+class TestParseMatch:
+    def test_basic(self, sample_raw_match):
+        result = parse_match(
+            match         =sample_raw_match,
+            tournament_id ="TOURN-001",
+            team_1_id     ="TEAM-AABBCC",
+            team_2_id     ="TEAM-DDEEFF",
+        )
+
+        assert result[DataKeys.Match.ID]           == "match_001"
+        assert result[DataKeys.Match.TOURNAMENT]   == "TOURN-001"
+        assert result[DataKeys.Match.CATEGORY]     == "7/6 sterk"
+        assert result[DataKeys.Match.POULE]        == "Groep A"
+        assert result[DataKeys.Match.DATE]         == "2026-01-15"
+        assert result[DataKeys.Match.TIME]         == "14:30:00"
+        assert result[DataKeys.Match.INFO]         == "Regular match"
+        assert result[DataKeys.Match.TEAM_1_ID]    == "TEAM-AABBCC"
+        assert result[DataKeys.Match.TEAM_2_ID]    == "TEAM-DDEEFF"
+        assert result[DataKeys.Match.TEAM_1_SCORE] == 14
+        assert result[DataKeys.Match.TEAM_2_SCORE] == 8
+        assert result[DataKeys.General.SCRAPED_AT] == "2026-01-10T10:00:00Z"
+
+    def test_no_nested_team_dicts_in_output(self, sample_raw_match):
+        """Parsed match must not contain nested team_1/team_2 sub-dicts."""
+        result = parse_match(sample_raw_match, "TOURN-001", "TEAM-AA", "TEAM-BB")
+        assert "team_1" not in result
+        assert "team_2" not in result
+
+    def test_missing_date_time_produces_none(self):
+        match = {
+            "match_id":   "match_001",
+            "category":   "7/6 sterk",
+            "poule":      "Groep A",
+            "info":       "",
+            "scraped_at": "2026-01-10T10:00:00Z",
+            "team_1":     {"score": 10},
+            "team_2":     {"score": 5},
+        }
+        result = parse_match(match, "TOURN-001", "TEAM-AA", "TEAM-BB")
+        assert result[DataKeys.Match.DATE] is None
+        assert result[DataKeys.Match.TIME] is None
+
+    def test_invalid_date_time_produces_none(self):
+        match = {
+            "match_id":   "match_001",
+            "category":   "7/6 sterk",
+            "poule":      "Groep A",
+            "date":       "not-a-date",
+            "time":       "not-a-time",
+            "info":       "",
+            "scraped_at": "2026-01-10T10:00:00Z",
+            "team_1":     {"score": 10},
+            "team_2":     {"score": 5},
+        }
+        result = parse_match(match, "TOURN-001", "TEAM-AA", "TEAM-BB")
+        assert result[DataKeys.Match.DATE] is None
+        assert result[DataKeys.Match.TIME] is None
+
+
+# ── ID Resolver ───────────────────────────────────────────────────────────────
+
+class TestLoadSaveIdMap:
+    def test_load_existing(self, temp_dirs, sample_id_map):
+        path = Path(temp_dirs["input"]) / FileNames.Input.PLAYER_ID_MAP
+        path.write_text(json.dumps(sample_id_map), encoding="utf-8")
+
+        assert load_id_map(temp_dirs["input"]) == sample_id_map
+
+    def test_load_missing_returns_empty(self, temp_dirs):
+        assert load_id_map(temp_dirs["input"]) == {}
+
+    def test_save_roundtrip(self, temp_dirs, sample_id_map):
+        save_id_map(sample_id_map, temp_dirs["input"])
+        assert load_id_map(temp_dirs["input"]) == sample_id_map
+
+
+class TestLoadSavePlayers:
+    def test_load_existing(self, temp_dirs, sample_players):
+        path = Path(temp_dirs["input"]) / FileNames.Input.PLAYERS
+        path.write_text(json.dumps(sample_players), encoding="utf-8")
+
+        assert load_players(temp_dirs["input"]) == sample_players
+
+    def test_load_missing_returns_empty(self, temp_dirs):
+        assert load_players(temp_dirs["input"]) == {}
+
+    def test_save_roundtrip(self, temp_dirs, sample_players):
+        save_players(sample_players, temp_dirs["input"])
+        assert load_players(temp_dirs["input"]) == sample_players
+
+
+class TestGenerateCanonicalId:
+    def test_first_player_is_001(self):
+        result = _generate_canonical_id("New Player", {})
+        assert result.startswith("PLR-001-")
+
+    def test_increments_from_existing(self, sample_players):
+        # sample_players has PLR-001 and PLR-002
+        result = _generate_canonical_id("New Player", sample_players)
+        assert result.startswith("PLR-003-")
+
+    def test_hash_extension_length(self):
+        result = _generate_canonical_id("Test Player", {})
+        parts = result.split("-")
+        # format: PLR-XXX-HHHHHH
+        assert len(parts) == 3
+        assert len(parts[2]) == 6
+
+    def test_deterministic_for_same_name(self, sample_players):
+        r1 = _generate_canonical_id("Test Player", sample_players)
+        r2 = _generate_canonical_id("Test Player", sample_players)
+        assert r1 == r2
+
+    def test_different_names_produce_different_ids(self, sample_players):
+        r1 = _generate_canonical_id("Player A", sample_players)
+        r2 = _generate_canonical_id("Player B", sample_players)
+        # Sequential number will be the same, but hash extension must differ
+        assert r1 != r2
+
+
+class TestResolvePlayer:
+    def test_known_name_returns_immediately(self, temp_dirs, sample_id_map, sample_players):
+        result = resolve_player("Alice Johnson", sample_id_map, sample_players, temp_dirs["input"])
+        assert result == "PLR-001-ABC123"
+
+    @patch("consolidation.id_resolver._open_resolution_popup")
+    def test_unknown_name_opens_popup(self, mock_popup, temp_dirs, sample_id_map, sample_players):
+        mock_popup.return_value = "PLR-003-NEW123"
+
+        result = resolve_player("Unknown Player", sample_id_map, sample_players, temp_dirs["input"])
+
+        assert result == "PLR-003-NEW123"
+        mock_popup.assert_called_once_with("Unknown Player", sample_id_map, sample_players)
+
+    @patch("consolidation.id_resolver._open_resolution_popup")
+    def test_resolution_persisted_to_id_map(self, mock_popup, temp_dirs, sample_id_map, sample_players):
+        mock_popup.return_value = "PLR-003-NEW123"
+
+        resolve_player("Unknown Player", sample_id_map, sample_players, temp_dirs["input"])
+
+        assert sample_id_map["Unknown Player"] == "PLR-003-NEW123"
+        # Verify persisted to disk
+        saved = load_id_map(temp_dirs["input"])
+        assert saved["Unknown Player"] == "PLR-003-NEW123"
+
+    @patch("consolidation.id_resolver._open_resolution_popup")
+    def test_popup_returns_unknown_raises(self, mock_popup, temp_dirs, sample_id_map, sample_players):
+        mock_popup.return_value = "unknown"
+
+        with pytest.raises(ValueError, match="could not be resolved"):
+            resolve_player("Ghost Player", sample_id_map, sample_players, temp_dirs["input"])
+
+
+# ── Deduplicator ──────────────────────────────────────────────────────────────
+
+class TestExtractPlayersFromMatch:
+    @patch("consolidation.deduplicator.resolve_player")
+    def test_returns_four_players_in_order(self, mock_resolve, sample_raw_match, sample_players):
+        all_players = {
+            "PLR-001-ABC123": sample_players["PLR-001-ABC123"],
+            "PLR-002-DEF456": sample_players["PLR-002-DEF456"],
+            "PLR-003-GHI789": {DataKeys.Player.ID: "PLR-003-GHI789", DataKeys.Player.NAME: "Charlie Brown", DataKeys.Player.GENDER: "male"},
+            "PLR-004-JKL012": {DataKeys.Player.ID: "PLR-004-JKL012", DataKeys.Player.NAME: "Diana Prince",  DataKeys.Player.GENDER: "female"},
+        }
+        mock_resolve.side_effect = ["PLR-001-ABC123", "PLR-002-DEF456", "PLR-003-GHI789", "PLR-004-JKL012"]
+
+        result = extract_players_from_match(sample_raw_match, {}, all_players, "/fake/path")
+
+        assert len(result) == 4
+        assert mock_resolve.call_count == 4
+        # Order: team_1/p1, team_1/p2, team_2/p1, team_2/p2
+        assert result[0][DataKeys.Player.NAME] == "Alice Johnson"
+        assert result[1][DataKeys.Player.NAME] == "Bob Smith"
+        assert result[2][DataKeys.Player.NAME] == "Charlie Brown"
+        assert result[3][DataKeys.Player.NAME] == "Diana Prince"
+
+    @patch("consolidation.deduplicator.resolve_player")
+    def test_each_player_dict_contains_id_name_gender(self, mock_resolve, sample_raw_match, sample_players):
+        all_players = {
+            "PLR-001-ABC123": sample_players["PLR-001-ABC123"],
+            "PLR-002-DEF456": sample_players["PLR-002-DEF456"],
+            "PLR-003-GHI789": {DataKeys.Player.ID: "PLR-003-GHI789", DataKeys.Player.NAME: "Charlie Brown", DataKeys.Player.GENDER: "male"},
+            "PLR-004-JKL012": {DataKeys.Player.ID: "PLR-004-JKL012", DataKeys.Player.NAME: "Diana Prince",  DataKeys.Player.GENDER: "female"},
+        }
+        mock_resolve.side_effect = ["PLR-001-ABC123", "PLR-002-DEF456", "PLR-003-GHI789", "PLR-004-JKL012"]
+
+        result = extract_players_from_match(sample_raw_match, {}, all_players, "/fake/path")
+
+        for player in result:
+            assert DataKeys.Player.ID     in player
+            assert DataKeys.Player.NAME   in player
+            assert DataKeys.Player.GENDER in player
+
+
+class TestDeduplicatePlayers:
+    def test_no_duplicates_unchanged(self):
+        players = [
+            {DataKeys.Player.ID: "PLR-001", DataKeys.Player.NAME: "Alice"},
+            {DataKeys.Player.ID: "PLR-002", DataKeys.Player.NAME: "Bob"},
+        ]
+        assert deduplicate_players(players) == players
+
+    def test_removes_duplicates_keeps_first(self):
+        players = [
+            {DataKeys.Player.ID: "PLR-001", DataKeys.Player.NAME: "Alice"},
+            {DataKeys.Player.ID: "PLR-002", DataKeys.Player.NAME: "Bob"},
+            {DataKeys.Player.ID: "PLR-001", DataKeys.Player.NAME: "Alice (dupe)"},
+        ]
+        result = deduplicate_players(players)
+        assert len(result) == 2
+        # First occurrence kept
+        assert result[0][DataKeys.Player.NAME] == "Alice"
+
+    def test_empty_list(self):
+        assert deduplicate_players([]) == []
+
+
+class TestGenerateTeamId:
+    def test_format(self):
+        result = _generate_team_id("PLR-001-ABC123", "PLR-002-DEF456")
+        assert result.startswith("TEAM-")
+        # TEAM- + 8 hex chars
+        assert len(result) == 13
+
+    def test_order_agnostic(self):
+        r1 = _generate_team_id("PLR-001-ABC123", "PLR-002-DEF456")
+        r2 = _generate_team_id("PLR-002-DEF456", "PLR-001-ABC123")
+        assert r1 == r2
+
+    def test_deterministic(self):
+        r1 = _generate_team_id("PLR-001-ABC123", "PLR-002-DEF456")
+        r2 = _generate_team_id("PLR-001-ABC123", "PLR-002-DEF456")
+        assert r1 == r2
+
+    def test_different_pairs_produce_different_ids(self):
+        r1 = _generate_team_id("PLR-001-ABC123", "PLR-002-DEF456")
+        r2 = _generate_team_id("PLR-001-ABC123", "PLR-003-GHI789")
+        assert r1 != r2
+
+
+class TestRegisterTeam:
+    def test_new_team_added_to_dict(self):
+        teams = {}
+        team_id = _register_team("PLR-001-ABC123", "PLR-002-DEF456", teams)
+
+        assert team_id in teams
+        assert teams[team_id][DataKeys.Team.ID]       == team_id
+        assert teams[team_id][DataKeys.Team.PLAYER_1] in {"PLR-001-ABC123", "PLR-002-DEF456"}
+        assert teams[team_id][DataKeys.Team.PLAYER_2] in {"PLR-001-ABC123", "PLR-002-DEF456"}
+
+    def test_players_stored_in_sorted_order(self):
+        """Player order in the stored record must always be alphabetical."""
+        teams = {}
+        _register_team("PLR-002-DEF456", "PLR-001-ABC123", teams)
+        record = next(iter(teams.values()))
+        assert record[DataKeys.Team.PLAYER_1] == "PLR-001-ABC123"
+        assert record[DataKeys.Team.PLAYER_2] == "PLR-002-DEF456"
+
+    def test_existing_team_not_duplicated(self):
+        teams = {}
+        id1 = _register_team("PLR-001-ABC123", "PLR-002-DEF456", teams)
+        id2 = _register_team("PLR-001-ABC123", "PLR-002-DEF456", teams)
+
+        assert id1 == id2
+        assert len(teams) == 1
+
+    def test_reversed_order_not_duplicated(self):
+        """Same pair in reversed order must not create a second record."""
+        teams = {}
+        id1 = _register_team("PLR-001-ABC123", "PLR-002-DEF456", teams)
+        id2 = _register_team("PLR-002-DEF456", "PLR-001-ABC123", teams)
+
+        assert id1 == id2
+        assert len(teams) == 1
+
+
+class TestExtractTeamsFromMatch:
+    def test_returns_two_team_ids(self, four_players):
+        teams = {}
+        t1, t2 = extract_teams_from_match(four_players, teams)
+
+        assert t1.startswith("TEAM-")
+        assert t2.startswith("TEAM-")
+        assert t1 != t2
+
+    def test_two_teams_registered(self, four_players):
+        teams = {}
+        extract_teams_from_match(four_players, teams)
+        assert len(teams) == 2
+
+    def test_team_compositions_correct(self, four_players):
+        teams = {}
+        t1, t2 = extract_teams_from_match(four_players, teams)
+
+        assert set([teams[t1][DataKeys.Team.PLAYER_1], teams[t1][DataKeys.Team.PLAYER_2]]) == {"PLR-001-ABC123", "PLR-002-DEF456"}
+        assert set([teams[t2][DataKeys.Team.PLAYER_1], teams[t2][DataKeys.Team.PLAYER_2]]) == {"PLR-003-GHI789", "PLR-004-JKL012"}
+
+    def test_same_match_twice_does_not_duplicate_teams(self, four_players):
+        """Calling extract_teams_from_match twice with the same players must not grow the dict."""
+        teams = {}
+        extract_teams_from_match(four_players, teams)
+        extract_teams_from_match(four_players, teams)
+        assert len(teams) == 2
+
+
+# ── Run Consolidation ─────────────────────────────────────────────────────────
+
+class TestWriteOutput:
+    def test_creates_file_with_correct_content(self, temp_dirs):
+        data = [{"id": 1, "name": "Test"}]
+        _write_output(data, "test.json", Path(temp_dirs["output"]))
+
+        result = json.loads((Path(temp_dirs["output"]) / "test.json").read_text())
+        assert result == data
+
+    def test_creates_output_dir_if_missing(self, temp_dirs):
+        new_dir = Path(temp_dirs["output"]) / "nested" / "dir"
+        _write_output([{"x": 1}], "out.json", new_dir)
+        assert (new_dir / "out.json").exists()
+
+
+class TestLoadRawPoule:
+    def test_loads_list_of_dicts(self, temp_dirs):
+        data = [{"match_id": "match_001"}, {"match_id": "match_002"}]
+        path = Path(temp_dirs["raw"]) / "poule_a.json"
+        path.write_text(json.dumps(data), encoding="utf-8")
+
+        assert _load_raw_poule(path) == data
+
+    def test_empty_file_returns_empty_list(self, temp_dirs):
+        path = Path(temp_dirs["raw"]) / "empty.json"
+        path.write_text("[]", encoding="utf-8")
+
+        assert _load_raw_poule(path) == []
+
+
+class TestWalkTournament:
+    @patch("pipeline.run_consolidation.load_tournament_metadata")
+    @patch("pipeline.run_consolidation.extract_players_from_match")
+    @patch("pipeline.run_consolidation.extract_teams_from_match")
+    @patch("pipeline.run_consolidation.parse_match")
+    def test_returns_tournament_matches_players(
+        self, mock_parse, mock_teams, mock_players, mock_meta, temp_dirs
+    ):
+        mock_meta.return_value    = {DataKeys.Tournament.ID: "TOURN-001"}
+        mock_players.return_value = [
+            {DataKeys.Player.ID: "PLR-001"}, {DataKeys.Player.ID: "PLR-002"},
+            {DataKeys.Player.ID: "PLR-003"}, {DataKeys.Player.ID: "PLR-004"},
+        ]
+        mock_teams.return_value = ("TEAM-AA", "TEAM-BB")
+        mock_parse.return_value = {DataKeys.Match.ID: "match_001"}
+
+        # Build tournament folder structure
+        t_path = Path(temp_dirs["raw"]) / "TOURN-001"
+        cat    = t_path / "7_6_sterk"
+        cat.mkdir(parents=True)
+        (cat / "poule_a.json").write_text(json.dumps([{"match_id": "match_001"}]), encoding="utf-8")
+
+        tournament, matches, players = _walk_tournament(
+            t_path, {}, {}, {}, temp_dirs["input"]
+        )
+
+        assert tournament == {DataKeys.Tournament.ID: "TOURN-001"}
+        assert len(matches) == 1
+        assert len(players) == 4
+
+    @patch("pipeline.run_consolidation.load_tournament_metadata")
+    @patch("pipeline.run_consolidation.extract_players_from_match")
+    @patch("pipeline.run_consolidation.extract_teams_from_match")
+    @patch("pipeline.run_consolidation.parse_match")
+    def test_multiple_categories_and_poules(
+        self, mock_parse, mock_teams, mock_players, mock_meta, temp_dirs
+    ):
+        mock_meta.return_value    = {DataKeys.Tournament.ID: "TOURN-001"}
+        mock_players.return_value = [
+            {DataKeys.Player.ID: "PLR-001"}, {DataKeys.Player.ID: "PLR-002"},
+            {DataKeys.Player.ID: "PLR-003"}, {DataKeys.Player.ID: "PLR-004"},
+        ]
+        mock_teams.return_value = ("TEAM-AA", "TEAM-BB")
+        mock_parse.return_value = {DataKeys.Match.ID: "match_001"}
+
+        t_path = Path(temp_dirs["raw"]) / "TOURN-001"
+        for cat in ["cat_a", "cat_b"]:
+            d = t_path / cat
+            d.mkdir(parents=True)
+            for poule in ["poule_a.json", "poule_b.json"]:
+                (d / poule).write_text(
+                    json.dumps([{"match_id": f"{cat}_{poule}"}]), encoding="utf-8"
+                )
+
+        _, matches, _ = _walk_tournament(t_path, {}, {}, {}, temp_dirs["input"])
+        # 2 categories × 2 poules × 1 match each
+        assert len(matches) == 4
+
+    @patch("pipeline.run_consolidation.load_tournament_metadata")
+    def test_missing_metadata_raises(self, mock_meta, temp_dirs):
+        mock_meta.side_effect = FileNotFoundError("Missing metadata.json")
+
+        t_path = Path(temp_dirs["raw"]) / "TOURN-001"
+        t_path.mkdir()
+
+        with pytest.raises(FileNotFoundError):
+            _walk_tournament(t_path, {}, {}, {}, temp_dirs["input"])
+
+    @patch("pipeline.run_consolidation.load_tournament_metadata")
+    @patch("pipeline.run_consolidation.extract_players_from_match")
+    @patch("pipeline.run_consolidation.extract_teams_from_match")
+    @patch("pipeline.run_consolidation.parse_match")
+    def test_empty_category_produces_no_matches(
+        self, mock_parse, mock_teams, mock_players, mock_meta, temp_dirs
+    ):
+        mock_meta.return_value = {DataKeys.Tournament.ID: "TOURN-001"}
+
+        t_path = Path(temp_dirs["raw"]) / "TOURN-001"
+        (t_path / "empty_cat").mkdir(parents=True)
+
+        _, matches, players = _walk_tournament(t_path, {}, {}, {}, temp_dirs["input"])
+
+        assert matches  == []
+        assert players  == []
+        mock_parse.assert_not_called()
+
+
+class TestConsolidate:
+    @patch("pipeline.run_consolidation._walk_tournament")
+    @patch("pipeline.run_consolidation.deduplicate_players")
+    @patch("pipeline.run_consolidation.load_id_map")
+    @patch("pipeline.run_consolidation.load_players")
+    @patch("pipeline.run_consolidation.save_id_map")
+    @patch("pipeline.run_consolidation.save_players")
+    @patch("pipeline.run_consolidation._write_output")
+    def test_writes_four_output_files(
+        self, mock_write, mock_save_players, mock_save_id_map,
+        mock_load_players, mock_load_id_map, mock_dedup, mock_walk, temp_dirs
+    ):
+        mock_load_id_map.return_value    = {}
+        mock_load_players.return_value   = {}
+        mock_walk.return_value           = ({"id": "TOURN-001"}, [{"id": "match_001"}], [{"id": "PLR-001"}])
+        mock_dedup.return_value          = [{"id": "PLR-001"}]
+
+        (Path(temp_dirs["raw"]) / "TOURN-001").mkdir()
+
+        consolidate(temp_dirs["raw"], temp_dirs["output"], temp_dirs["input"])
+
+        assert mock_write.call_count == 4  # tournaments, matches, players, teams
+
+    @patch("pipeline.run_consolidation._walk_tournament")
+    @patch("pipeline.run_consolidation.deduplicate_players")
+    @patch("pipeline.run_consolidation.load_id_map")
+    @patch("pipeline.run_consolidation.load_players")
+    @patch("pipeline.run_consolidation.save_id_map")
+    @patch("pipeline.run_consolidation.save_players")
+    @patch("pipeline.run_consolidation._write_output")
+    def test_skips_tournament_on_missing_metadata(
+        self, mock_write, mock_save_players, mock_save_id_map,
+        mock_load_players, mock_load_id_map, mock_dedup, mock_walk, temp_dirs
+    ):
+        """A FileNotFoundError from _walk_tournament must skip the tournament, not crash."""
+        mock_load_id_map.return_value  = {}
+        mock_load_players.return_value = {}
+        mock_walk.side_effect          = FileNotFoundError("No metadata")
+        mock_dedup.return_value        = []
+
+        (Path(temp_dirs["raw"]) / "TOURN-001").mkdir()
+
+        consolidate(temp_dirs["raw"], temp_dirs["output"], temp_dirs["input"])
+
+        # Should still write four empty output files
+        assert mock_write.call_count == 4
+
+    def test_missing_raw_path_raises(self, temp_dirs):
+        with pytest.raises(FileNotFoundError, match="Raw data path does not exist"):
+            consolidate("/non/existent/path", temp_dirs["output"], temp_dirs["input"])
+
+    @patch("pipeline.run_consolidation._walk_tournament")
+    @patch("pipeline.run_consolidation.deduplicate_players")
+    @patch("pipeline.run_consolidation.load_id_map")
+    @patch("pipeline.run_consolidation.load_players")
+    @patch("pipeline.run_consolidation.save_id_map")
+    @patch("pipeline.run_consolidation.save_players")
+    @patch("pipeline.run_consolidation._write_output")
+    def test_id_map_and_players_saved_once(
+        self, mock_write, mock_save_players, mock_save_id_map,
+        mock_load_players, mock_load_id_map, mock_dedup, mock_walk, temp_dirs
+    ):
+        """id_map and players must be saved exactly once at the end."""
+        mock_load_id_map.return_value  = {}
+        mock_load_players.return_value = {}
+        mock_walk.return_value         = ({}, [], [])
+        mock_dedup.return_value        = []
+
+        (Path(temp_dirs["raw"]) / "TOURN-001").mkdir()
+
+        consolidate(temp_dirs["raw"], temp_dirs["output"], temp_dirs["input"])
+
+        mock_save_id_map.assert_called_once()
+        mock_save_players.assert_called_once()
