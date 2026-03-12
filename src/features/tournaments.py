@@ -56,9 +56,10 @@ def _unique_players(
         if m.get(DataKeys.Match.TOURNAMENT) != tid:
             continue
         for team_key in (DataKeys.Match.TEAM_1_ID, DataKeys.Match.TEAM_2_ID):
-            team = next(
+            team = next((
                 t for t in teams 
                 if t.get(DataKeys.Team.ID, "t_na") == m.get(team_key, "m_na")
+                ), {}
             )
             if team.get(DataKeys.Team.PLAYER_1):
                 pids.add(team[DataKeys.Team.PLAYER_1])

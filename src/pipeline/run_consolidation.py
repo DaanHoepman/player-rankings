@@ -216,10 +216,10 @@ def consolidate(raw_path: str, output_path: str, input_path: str) -> None:
 
     # Write flat output files
     print("\nWriting output files...")
-    _write_output(all_tournaments, FileNames.Flat.TOURNAMENTS, out)
-    _write_output(all_matches, FileNames.Flat.MATCHES, out)
-    _write_output(unique_players, FileNames.Flat.PLAYERS, out)
-    _write_output(list(all_teams.values()), FileNames.Flat.TEAMS, out)
+    _write_output(all_tournaments, FileNames.Output.TOURNAMENTS, out)
+    _write_output(all_matches, FileNames.Output.MATCHES, out)
+    _write_output(unique_players, FileNames.Output.PLAYERS, out)
+    _write_output(list(all_teams.values()), FileNames.Output.TEAMS, out)
 
     print("\nConsolidation complete.")
     print(f"\t{len(all_tournaments)} tournaments")
