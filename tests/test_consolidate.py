@@ -165,8 +165,8 @@ class TestParseTournamentMetadata:
         assert result[DataKeys.Tournament.NAME]              == "Test Tournament"
         assert result[DataKeys.Tournament.START_DATE]        == "2026-01-15"
         assert result[DataKeys.Tournament.END_DATE]          == "2026-01-17"
-        assert result[DataKeys.Tournament.NUM_CATEGORIES]    == 3
-        assert result[DataKeys.Tournament.NUM_REGISTRATIONS] == 24
+        assert result[DataKeys.Tournament.CATEGORIES]        == 3
+        assert result[DataKeys.Tournament.REGISTRATIONS]     == 24
         assert result[DataKeys.General.SCRAPED_AT]           == "2026-01-10T10:00:00Z"
 
     def test_missing_keys_raises(self):

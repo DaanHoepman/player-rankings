@@ -35,8 +35,8 @@ def parse_tournament_metadata(tournament_id: str, metadata: Dict) -> Dict:
         DataKeys.Tournament.NAME:              metadata["tournament_name"],
         DataKeys.Tournament.START_DATE:        metadata["start_date"],
         DataKeys.Tournament.END_DATE:          metadata["end_date"],
-        DataKeys.Tournament.NUM_CATEGORIES:    metadata["num_categories"],
-        DataKeys.Tournament.NUM_REGISTRATIONS: metadata["num_registrations"],
+        DataKeys.Tournament.CATEGORIES:        metadata["num_categories"],
+        DataKeys.Tournament.REGISTRATIONS:     metadata["num_registrations"],
         DataKeys.General.SCRAPED_AT:           metadata["scraped_at"] 
     }
 
