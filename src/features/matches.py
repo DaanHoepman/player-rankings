@@ -1,37 +1,20 @@
 # src/features/matches.py
 
-# ── Standard Library Imports ──────────────────────────────────────────
-
 from typing import Dict, List, Tuple
-
-# ── Local Library Imports ─────────────────────────────────────────────
 
 from features._base import apply_features, FeatureFn
 from constants import DataKeys, DefaultValues
 
-# ── Feature functions ─────────────────────────────────────────────────
+# ── Helpers ───────────────────────────────────────────────────────────
 
 def __get_scores(record: Dict) -> Tuple[int | None, int | None]:
-    """
-    Extracts the scores of both teams from a match record.
-
-    Parameters
-    ----------
-    record:
-        A match record dict containing 'team_1_score' and 'team_2_score'
-        keys (or DataKeys equivalent).
-
-    Returns
-    -------
-    Tuple[int | None, int | None]
-        Tuple of scores (team_1_score, team_2_score) as integers or None
-        when not present in the record.
-    """
+    """Extracts the scores of both teams from a match record."""
     t1_score = record.get(DataKeys.Match.TEAM_1_SCORE)
     t2_score = record.get(DataKeys.Match.TEAM_2_SCORE)
 
     return (t1_score, t2_score)
 
+# ── Feature functions ─────────────────────────────────────────────────
 
 def _status(record: Dict, **_) -> Dict:
     """
@@ -45,7 +28,7 @@ def _status(record: Dict, **_) -> Dict:
         status    = DefaultValues.Match.Status.COMPLETED
         is_played = True
     elif t1_score is None and t2_score is None:
-        status    = DefaultValues.Match.Status.COMPLETED
+        status    = DefaultValues.Match.Status.PENDING
         is_played = False
     else:
         status    = DefaultValues.Entries.UNKNOWN
