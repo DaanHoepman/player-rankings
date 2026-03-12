@@ -1,13 +1,9 @@
 # src/features/teams.py
 
-# ── Standard Library Imports ──────────────────────────────────────────
-
 from typing import List, Dict, Set
 
-# ── Local Library Imports ─────────────────────────────────────────────
-
 from features._base import apply_features, FeatureFn
-from constants import DataKeys, DefaultValues
+from constants import DataKeys
 
 # ── Helpers ───────────────────────────────────────────────────────────
 
@@ -28,6 +24,7 @@ def _completed_matches_for_team(
     return [
         m for m in _matches_for_team(team_id, matches)
         if m.get(DataKeys.Match.IS_PLAYED)
+        and m.get(DataKeys.Match.IS_VALID)
     ]
 
 
