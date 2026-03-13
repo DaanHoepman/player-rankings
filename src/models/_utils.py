@@ -2,7 +2,7 @@
 
 from constants import DefaultValues
 
-#-------------------------------------------------------------------------
+# ── Helpers ───────────────────────────────────────────────────────────
 
 def knltb_to_trueskill_mu(
     knltb_rating: float,
@@ -28,18 +28,20 @@ def knltb_to_trueskill_mu(
     knltb_max : float
         Upper bound of the KNLTB scale (weakest player). Default 9.0.
     mu_min : float
-        TrueSkill mu assigned to the weakest player (knltb_max). Default 10.0
+        TrueSkill mu assigned to the weakest player (knltb_max). 
+        Default 10.0
     mu_max : float
-        TrueSkill mu assigned to the strongest player (knltb_min). Default 40.0.
+        TrueSkill mu assigned to the strongest player (knltb_min). 
+        Default 40.0.
 
     Returns
     -------
     float
-        Mu value for use in TrueSkillModel
+        Mu value for use in TrueSkillModel.
     """
-    knltb_rating    = max(knltb_min, min(knltb_max, knltb_rating))          # clamp to valid range
-    normalised      = (knltb_rating - knltb_min) / (knltb_max - knltb_min)  # 0 = strongest, 1 = weakest
-    return mu_max - normalised * (mu_max - mu_min)                          # invert onto mu range
+    knltb_rating    = max(knltb_min, min(knltb_max, knltb_rating))
+    normalised      = (knltb_rating - knltb_min) / (knltb_max - knltb_min)
+    return mu_max - normalised * (mu_max - mu_min)
     
 
 def trueskill_mu_to_knltb(
@@ -61,9 +63,11 @@ def trueskill_mu_to_knltb(
     knltb_max : float
         Upper bound of the KNLTB scale (weakest player). Default 9.0.
     mu_min : float
-        TrueSkill mu assigned to the weakest player (knltb_max). Default 10.0
+        TrueSkill mu assigned to the weakest player (knltb_max). 
+        Default 10.0
     mu_max : float
-        TrueSkill mu assigned to the strongest player (knltb_min). Default 40.0.
+        TrueSkill mu assigned to the strongest player (knltb_min). 
+        Default 40.0.
 
     Returns
     -------

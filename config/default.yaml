@@ -10,8 +10,7 @@ paths:
 
 models:
   output_format: csv
-  tournaments:
-    - XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX
+  tournaments: null
 
 scraper:
   tournament_ids:
