@@ -137,14 +137,14 @@ class DataKeys:
         """
         Standard keys for player rating records
         """
-        INITIAL_RANK            = "initial_rank"
-        ELO_VALUE               = "elo_value"
-        SKILL_MU                = "skill_mu"
-        SKILL_SIGMA             = "skill_sigma"
-        ELO_RANK                = "elo_rank"
-        KNLTB_RANK              = "knltb_rank"
-        TRUESKILL_RANK          = "trueskill_rank"
-        ADJUSTED_TRUESKILL_RANK = "adjusted_trueskill_rank"
+        INITIAL_RANK       = "initial_rank"
+        ELO_VALUE          = "elo_value"
+        SKILL_MU           = "skill_mu"
+        SKILL_SIGMA        = "skill_sigma"
+        ELO_RANK           = "elo_rank"
+        KNLTB_RANK         = "knltb_rank"
+        TRUESKILL_RANK     = "trueskill_rank"
+        ADJUSTED_TRUESKILL = "adjusted_trueskill"
 
 
     class General(StrEnum):
