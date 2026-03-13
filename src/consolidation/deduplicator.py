@@ -62,6 +62,8 @@ def extract_players_from_match(
                     players[canonical_id][DataKeys.Player.NAME],
                 DataKeys.Player.GENDER: 
                     players[canonical_id][DataKeys.Player.GENDER],
+                DataKeys.Rating.INITIAL_RANK:
+                    players[canonical_id][DataKeys.Rating.INITIAL_RANK]
             })
 
     return extracted

@@ -14,7 +14,7 @@ features:
 model ?= knltb
 
 run-model:
-	python -m src.pipeline.run_models $ (model)
+	python -m src.pipeline.run_models $(model)
 
 # Test the functionality of the project (rerun after code refactoring)
 test:
