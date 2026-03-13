@@ -388,8 +388,8 @@ class TestExtractPlayersFromMatch:
         all_players = {
             "PLR-001-ABC123": sample_players["PLR-001-ABC123"],
             "PLR-002-DEF456": sample_players["PLR-002-DEF456"],
-            "PLR-003-GHI789": {DataKeys.Player.ID: "PLR-003-GHI789", DataKeys.Player.NAME: "Charlie Brown", DataKeys.Player.GENDER: "male"},
-            "PLR-004-JKL012": {DataKeys.Player.ID: "PLR-004-JKL012", DataKeys.Player.NAME: "Diana Prince",  DataKeys.Player.GENDER: "female"},
+            "PLR-003-GHI789": {DataKeys.Player.ID: "PLR-003-GHI789", DataKeys.Player.NAME: "Charlie Brown", DataKeys.Player.GENDER: "male", DataKeys.Rating.INITIAL_RANK: 100},
+            "PLR-004-JKL012": {DataKeys.Player.ID: "PLR-004-JKL012", DataKeys.Player.NAME: "Diana Prince",  DataKeys.Player.GENDER: "female", DataKeys.Rating.INITIAL_RANK: 100},
         }
         mock_resolve.side_effect = ["PLR-001-ABC123", "PLR-002-DEF456", "PLR-003-GHI789", "PLR-004-JKL012"]
 
@@ -408,17 +408,18 @@ class TestExtractPlayersFromMatch:
         all_players = {
             "PLR-001-ABC123": sample_players["PLR-001-ABC123"],
             "PLR-002-DEF456": sample_players["PLR-002-DEF456"],
-            "PLR-003-GHI789": {DataKeys.Player.ID: "PLR-003-GHI789", DataKeys.Player.NAME: "Charlie Brown", DataKeys.Player.GENDER: "male"},
-            "PLR-004-JKL012": {DataKeys.Player.ID: "PLR-004-JKL012", DataKeys.Player.NAME: "Diana Prince",  DataKeys.Player.GENDER: "female"},
+            "PLR-003-GHI789": {DataKeys.Player.ID: "PLR-003-GHI789", DataKeys.Player.NAME: "Charlie Brown", DataKeys.Player.GENDER: "male", DataKeys.Rating.INITIAL_RANK: 100},
+            "PLR-004-JKL012": {DataKeys.Player.ID: "PLR-004-JKL012", DataKeys.Player.NAME: "Diana Prince",  DataKeys.Player.GENDER: "female", DataKeys.Rating.INITIAL_RANK: 100},
         }
         mock_resolve.side_effect = ["PLR-001-ABC123", "PLR-002-DEF456", "PLR-003-GHI789", "PLR-004-JKL012"]
 
         result = extract_players_from_match(sample_raw_match, {}, all_players, "/fake/path")
 
         for player in result:
-            assert DataKeys.Player.ID     in player
-            assert DataKeys.Player.NAME   in player
-            assert DataKeys.Player.GENDER in player
+            assert DataKeys.Player.ID           in player
+            assert DataKeys.Player.NAME         in player
+            assert DataKeys.Player.GENDER       in player
+            assert DataKeys.Rating.INITIAL_RANK in player
 
 
 class TestDeduplicatePlayers:

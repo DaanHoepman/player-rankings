@@ -189,7 +189,7 @@ class KnltbModel(BaseModel):
 
         for pid in [ta_p1, ta_p2]:
             self.ratings[pid][DataKeys.Rating.KNLTB_RANK]     += (
-                self.k * (result_a - prob_a)
+                self.k * (prob_a - result_a)
             )
             self.ratings[pid][DataKeys.Player.MATCHES_PLAYED] += 1
             self._log_history(
@@ -201,7 +201,7 @@ class KnltbModel(BaseModel):
 
         for pid in [tb_p1, tb_p2]:
             self.ratings[pid][DataKeys.Rating.KNLTB_RANK]     += (
-                self.k * (result_b - prob_b)
+                self.k * (prob_b - result_b)
             )
             self.ratings[pid][DataKeys.Player.MATCHES_PLAYED] += 1
             self._log_history(
